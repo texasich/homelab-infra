@@ -1,0 +1,42 @@
+name: k8s manifest lint
+
+on:
+  pull_request:
+    paths:
+      - "kubernetes/**"
+  push:
+    branches: [main]
+    paths:
+      - "kubernetes/**"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install kubeconform
+        run: |
+          wget -q https://github.com/yannh/kubeconform/releases/download/v0.6.4/kubeconform-linux-amd64.tar.gz
+          tar xzf kubeconform-linux-amd64.tar.gz
+          chmod +x kubeconform
+          mv kubeconform /usr/local/bin/
+
+      - name: lint base manifests
+        run: |
+          find kubernetes/base -name "*.yaml" -o -name "*.yml" | \
+            xargs kubeconform -summary -strict \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
+
+      - name: lint app manifests
+        run: |
+          find kubernetes/apps -name "*.yaml" -o -name "*.yml" | \
+            grep -v kustomization | \
+            xargs kubeconform -summary -strict \
+            -schema-location default
+
+      - name: check yaml syntax
+        run: |
+          pip install yamllint
+          yamllint -d relaxed kubernetes/

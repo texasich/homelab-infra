@@ -1,0 +1,66 @@
+---
+# bootstrap a fresh node — run this first on new machines
+# usage: ansible-playbook -i inventory.yml playbooks/bootstrap-node.yml
+
+- name: bootstrap node
+  hosts: all
+  become: true
+  tasks:
+    - name: update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: install base packages
+      apt:
+        name:
+          - curl
+          - wget
+          - vim
+          - htop
+          - iotop
+          - net-tools
+          - jq
+          - unzip
+          - ca-certificates
+          - gnupg
+          - lsb-release
+          - apt-transport-https
+        state: present
+
+    - name: set timezone
+      timezone:
+        name: UTC
+
+    - name: configure sysctl for k8s
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_set: true
+        reload: true
+      loop:
+        - { key: "net.bridge.bridge-nf-call-iptables", value: "1" }
+        - { key: "net.bridge.bridge-nf-call-ip6tables", value: "1" }
+        - { key: "net.ipv4.ip_forward", value: "1" }
+
+    - name: load br_netfilter module
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: ensure br_netfilter loads on boot
+      lineinfile:
+        path: /etc/modules-load.d/k8s.conf
+        line: br_netfilter
+        create: true
+        mode: "0644"
+
+    - name: disable swap
+      command: swapoff -a
+      changed_when: false
+
+    - name: remove swap from fstab
+      lineinfile:
+        path: /etc/fstab
+        regexp: "\\sswap\\s"
+        state: absent

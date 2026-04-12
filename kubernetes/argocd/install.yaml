@@ -1,0 +1,26 @@
+# argocd install — pin to a specific version
+# apply with: kubectl apply -n argocd -f install.yaml
+#
+# this pulls the upstream manifest directly. for production you'd
+# vendor this or use the helm chart, but for a homelab this is fine.
+#
+# version: v2.10.1
+# source: https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.1/manifests/install.yaml
+#
+# to install:
+#   kubectl create namespace argocd
+#   kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.1/manifests/install.yaml
+#
+# to get initial admin password:
+#   kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+#
+# this file is a pointer, not the actual manifest.
+# keeping the full 10k+ line manifest in the repo is noisy.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+# apply upstream manifest
+# kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.1/manifests/install.yaml

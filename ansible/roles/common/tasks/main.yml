@@ -1,0 +1,44 @@
+---
+# common role — applied to all nodes
+
+- name: set hostname
+  hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: update /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: "^127\\.0\\.1\\.1"
+    line: "127.0.1.1 {{ inventory_hostname }}"
+    state: present
+
+- name: configure unattended upgrades
+  apt:
+    name: unattended-upgrades
+    state: present
+
+- name: enable unattended security updates
+  copy:
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+
+- name: configure journald max size
+  lineinfile:
+    path: /etc/systemd/journald.conf
+    regexp: "^#?SystemMaxUse="
+    line: "SystemMaxUse=500M"
+  notify: restart journald
+
+- name: set file descriptor limits
+  pam_limits:
+    domain: "*"
+    limit_type: "{{ item.type }}"
+    limit_item: nofile
+    value: "{{ item.value }}"
+  loop:
+    - { type: soft, value: "65536" }
+    - { type: hard, value: "65536" }

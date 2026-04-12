@@ -1,0 +1,18 @@
+# copy to inventory.yml and fill in your hosts
+# DO NOT commit inventory.yml — it may contain IPs/hostnames
+
+all:
+  vars:
+    ansible_user: ubuntu
+    ansible_ssh_private_key_file: ~/.ssh/homelab
+  children:
+    servers:
+      hosts:
+        k3s-server-0:
+          ansible_host: 10.0.1.10
+    agents:
+      hosts:
+        k3s-agent-0:
+          ansible_host: 10.0.1.20
+        k3s-agent-1:
+          ansible_host: 10.0.1.21

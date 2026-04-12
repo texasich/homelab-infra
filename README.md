@@ -8,30 +8,59 @@ reference configs for a single-node-ish homelab setup. not a tutorial, not a fra
 
 the stack:
 
-- **k3s** — single cluster, few nodes. full k8s is overkill for a homelab, k3s gives you 90% of the api surface with 10% of the operator burden
-- **argocd** — gitops, pull-based deploys. push a manifest, argocd picks it up. if it's not in git it doesn't exist
-- **prometheus + grafana** — monitoring. you will forget what's running if you don't have dashboards. set it up early
-- **external-secrets** — secrets management. no more yaml-encoded base64 strings in your repo
+- **k3s** — single cluster, few nodes. full k8s is overkill for a homelab ([why?](./docs/decisions/001-why-k3s-not-k8s.md))
+- **argocd** — gitops, pull-based deploys ([why?](./docs/decisions/002-argocd-for-gitops.md))
+- **prometheus + grafana** — monitoring. you will forget what's running if you don't have dashboards
+- **external-secrets** — secrets management (not yet implemented, placeholder)
 - **terraform** — cloud-adjacent bits. vpc, dns, whatever needs an api call
-- **ansible** — node bootstrap. ssh hardening, package installs, the boring stuff that makes nodes not terrible
+- **ansible** — node bootstrap. ssh hardening, package installs, the boring stuff
 
 ## repo layout
 
 ```
-terraform/       — hcl modules and environment configs
-kubernetes/      — manifests, helm values, argocd apps
-ansible/         — playbooks and roles for node setup
-ci/              — github actions for linting and planning
-docs/            — architecture notes and decision records
+terraform/
+  modules/vpc/         — vpc with sensible defaults
+  modules/k3s-cluster/ — ec2-based k3s cluster
+  environments/homelab/— wiring it all together
+
+kubernetes/
+  base/                — namespaces, storage classes
+  argocd/              — argocd install + root app
+  monitoring/          — prometheus + grafana helm values
+  apps/sample-app/     — example deployment with probes
+
+ansible/
+  playbooks/           — bootstrap + ssh hardening
+  roles/common/        — shared tasks for all nodes
+
+ci/github-actions/     — terraform plan + k8s lint
+
+docs/
+  architecture.md      — how it all fits together
+  decisions/           — ADRs for key choices
 ```
 
 ## table of contents
 
-- [terraform modules](./terraform/)
-- [kubernetes manifests](./kubernetes/)
-- [ansible playbooks](./ansible/)
-- [ci/cd workflows](./ci/)
-- [architecture docs](./docs/)
+- [architecture overview](./docs/architecture.md)
+- terraform
+  - [vpc module](./terraform/modules/vpc/)
+  - [k3s-cluster module](./terraform/modules/k3s-cluster/)
+  - [homelab environment](./terraform/environments/homelab/)
+- kubernetes
+  - [base manifests](./kubernetes/base/)
+  - [argocd setup](./kubernetes/argocd/)
+  - [monitoring](./kubernetes/monitoring/)
+  - [sample app](./kubernetes/apps/sample-app/)
+- ansible
+  - [bootstrap playbook](./ansible/playbooks/bootstrap-node.yml)
+  - [ssh hardening](./ansible/playbooks/harden-ssh.yml)
+- ci/cd
+  - [terraform plan](./ci/github-actions/terraform-plan.yml)
+  - [k8s lint](./ci/github-actions/k8s-lint.yml)
+- decisions
+  - [why k3s](./docs/decisions/001-why-k3s-not-k8s.md)
+  - [why argocd](./docs/decisions/002-argocd-for-gitops.md)
 
 ## disclaimer
 

@@ -1,0 +1,57 @@
+# helm values for grafana
+# install with:
+#   helm repo add grafana https://grafana.github.io/helm-charts
+#   helm install grafana grafana/grafana -n monitoring -f grafana-values.yaml
+
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+persistence:
+  enabled: true
+  storageClassName: local-path
+  size: 5Gi
+
+# default admin — change after first login
+adminUser: admin
+adminPassword: changeme-please
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-kube-prometheus-prometheus.monitoring:9090
+        access: proxy
+        isDefault: true
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: ""
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    # node exporter dashboard
+    node-exporter:
+      gnetId: 1860
+      revision: 37
+      datasource: Prometheus
+    # k8s cluster overview
+    k8s-cluster:
+      gnetId: 7249
+      revision: 1
+      datasource: Prometheus

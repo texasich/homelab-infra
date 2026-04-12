@@ -1,0 +1,61 @@
+---
+# harden ssh config on all nodes
+# usage: ansible-playbook -i inventory.yml playbooks/harden-ssh.yml
+
+- name: harden ssh
+  hosts: all
+  become: true
+  tasks:
+    - name: disable root login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin no"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+    - name: disable password auth
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+    - name: disable empty passwords
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PermitEmptyPasswords"
+        line: "PermitEmptyPasswords no"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+    - name: set max auth tries
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?MaxAuthTries"
+        line: "MaxAuthTries 3"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+    - name: disable X11 forwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?X11Forwarding"
+        line: "X11Forwarding no"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+    - name: set login grace time
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?LoginGraceTime"
+        line: "LoginGraceTime 30"
+        validate: "sshd -t -f %s"
+      notify: restart sshd
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: sshd
+        state: restarted

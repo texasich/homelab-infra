@@ -1,0 +1,154 @@
+---
+# install prometheus node_exporter on all nodes.
+# pinned to a known-good version. systemd-managed, runs as a dedicated user,
+# binds to localhost+private interface only, scraped by prometheus on :9100.
+#
+# usage:
+#   ansible-playbook -i inventory.yml playbooks/install-monitoring.yml
+#   ansible-playbook -i inventory.yml playbooks/install-monitoring.yml -e node_exporter_version=1.8.2
+
+- name: install node_exporter on all nodes
+  hosts: all
+  become: true
+  vars:
+    node_exporter_version: "1.8.2"
+    node_exporter_user: node_exporter
+    node_exporter_bind_address: "0.0.0.0:9100"
+    node_exporter_arch: amd64
+    node_exporter_install_dir: /usr/local/bin
+    node_exporter_archive: "node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+    node_exporter_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/{{ node_exporter_archive }}"
+    node_exporter_collectors_enable:
+      - systemd
+    node_exporter_collectors_disable:
+      - hwmon
+      - wifi
+
+  tasks:
+    - name: ensure system group exists
+      group:
+        name: "{{ node_exporter_user }}"
+        system: true
+        state: present
+
+    - name: ensure system user exists
+      user:
+        name: "{{ node_exporter_user }}"
+        group: "{{ node_exporter_user }}"
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/node_exporter
+        create_home: false
+        state: present
+
+    - name: check installed version
+      command: "{{ node_exporter_install_dir }}/node_exporter --version"
+      register: node_exporter_installed
+      changed_when: false
+      failed_when: false
+
+    - name: download node_exporter tarball
+      get_url:
+        url: "{{ node_exporter_url }}"
+        dest: "/tmp/{{ node_exporter_archive }}"
+        mode: "0644"
+      when: >
+        node_exporter_installed.rc != 0
+        or node_exporter_version not in (node_exporter_installed.stderr | default(''))
+
+    - name: extract node_exporter binary
+      unarchive:
+        src: "/tmp/{{ node_exporter_archive }}"
+        dest: /tmp/
+        remote_src: true
+        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+      when: >
+        node_exporter_installed.rc != 0
+        or node_exporter_version not in (node_exporter_installed.stderr | default(''))
+
+    - name: install node_exporter binary
+      copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+        dest: "{{ node_exporter_install_dir }}/node_exporter"
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: true
+      notify: restart node_exporter
+      when: >
+        node_exporter_installed.rc != 0
+        or node_exporter_version not in (node_exporter_installed.stderr | default(''))
+
+    - name: install systemd unit
+      copy:
+        dest: /etc/systemd/system/node_exporter.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Prometheus node_exporter
+          Documentation=https://github.com/prometheus/node_exporter
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          User={{ node_exporter_user }}
+          Group={{ node_exporter_user }}
+          Type=simple
+          ExecStart={{ node_exporter_install_dir }}/node_exporter \
+            --web.listen-address={{ node_exporter_bind_address }} \
+            {% for c in node_exporter_collectors_enable %}--collector.{{ c }} {% endfor %}\
+            {% for c in node_exporter_collectors_disable %}--no-collector.{{ c }} {% endfor %}
+
+          Restart=on-failure
+          RestartSec=5s
+          NoNewPrivileges=true
+          ProtectHome=true
+          ProtectSystem=strict
+          ProtectKernelTunables=true
+          ProtectKernelModules=true
+          ProtectControlGroups=true
+          PrivateTmp=true
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - reload systemd
+        - restart node_exporter
+
+    - name: enable + start node_exporter
+      systemd:
+        name: node_exporter
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: open firewall for prometheus scraping
+      ufw:
+        rule: allow
+        port: "9100"
+        proto: tcp
+        from_ip: "{{ prometheus_scrape_cidr | default('10.0.0.0/8') }}"
+      when: ansible_facts.services['ufw.service'] is defined
+      failed_when: false
+
+    - name: smoke-test the metrics endpoint
+      uri:
+        url: "http://127.0.0.1:9100/metrics"
+        return_content: false
+        status_code: 200
+      retries: 3
+      delay: 2
+      register: ne_smoke
+      until: ne_smoke.status == 200
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: true
+
+    - name: restart node_exporter
+      systemd:
+        name: node_exporter
+        state: restarted

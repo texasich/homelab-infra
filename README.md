@@ -10,7 +10,7 @@ the stack:
 
 - **k3s** — single cluster, few nodes. full k8s is overkill for a homelab ([why?](./docs/decisions/001-why-k3s-not-k8s.md))
 - **argocd** — gitops, pull-based deploys ([why?](./docs/decisions/002-argocd-for-gitops.md))
-- **prometheus + grafana** — monitoring. you will forget what's running if you don't have dashboards
+- **prometheus + grafana** — monitoring, with [alerting rules](./kubernetes/monitoring/alerting-rules.yaml) and [runbooks](./docs/runbooks/) so the alerts actually mean something at 3am ([why prometheus, not datadog?](./docs/decisions/003-prometheus-vs-datadog.md))
 - **external-secrets** — secrets management (not yet implemented, placeholder)
 - **terraform** — cloud-adjacent bits. vpc, dns, whatever needs an api call
 - **ansible** — node bootstrap. ssh hardening, package installs, the boring stuff
@@ -27,10 +27,11 @@ kubernetes/
   base/                — namespaces, storage classes
   argocd/              — argocd install + root app
   monitoring/          — prometheus + grafana helm values
+                        + alerting rules + grafana dashboards
   apps/sample-app/     — example deployment with probes
 
 ansible/
-  playbooks/           — bootstrap + ssh hardening
+  playbooks/           — bootstrap, ssh hardening, monitoring
   roles/common/        — shared tasks for all nodes
 
 ci/github-actions/     — terraform plan + k8s lint
@@ -38,6 +39,7 @@ ci/github-actions/     — terraform plan + k8s lint
 docs/
   architecture.md      — how it all fits together
   decisions/           — ADRs for key choices
+  runbooks/            — what to do when an alert fires
 ```
 
 ## table of contents
@@ -51,16 +53,23 @@ docs/
   - [base manifests](./kubernetes/base/)
   - [argocd setup](./kubernetes/argocd/)
   - [monitoring](./kubernetes/monitoring/)
+    - [alerting rules](./kubernetes/monitoring/alerting-rules.yaml)
+    - [grafana dashboards](./kubernetes/monitoring/dashboards/)
   - [sample app](./kubernetes/apps/sample-app/)
 - ansible
   - [bootstrap playbook](./ansible/playbooks/bootstrap-node.yml)
   - [ssh hardening](./ansible/playbooks/harden-ssh.yml)
+  - [install monitoring (node_exporter)](./ansible/playbooks/install-monitoring.yml)
 - ci/cd
   - [terraform plan](./ci/github-actions/terraform-plan.yml)
   - [k8s lint](./ci/github-actions/k8s-lint.yml)
 - decisions
   - [why k3s](./docs/decisions/001-why-k3s-not-k8s.md)
   - [why argocd](./docs/decisions/002-argocd-for-gitops.md)
+  - [prometheus vs datadog](./docs/decisions/003-prometheus-vs-datadog.md)
+- runbooks
+  - [high cpu throttling](./docs/runbooks/high-cpu-throttling.md)
+  - [pod crashloopbackoff](./docs/runbooks/pod-crashloop.md)
 
 ## disclaimer
 

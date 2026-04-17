@@ -1,0 +1,307 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Four golden signals (latency, traffic, errors, saturation) for ingress-fronted workloads in the homelab cluster.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "p50 / p95 / p99 request latency from the ingress controller, by service.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisLabel": "seconds",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "spanNulls": true
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, exported_service) (rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
+          "legendFormat": "p50 {{exported_service}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, exported_service) (rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
+          "legendFormat": "p95 {{exported_service}}",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, exported_service) (rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
+          "legendFormat": "p99 {{exported_service}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Request latency (p50/p95/p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Current p99 latency vs 1h ago — quick eyeball for regression.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "red", "value": 1}
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace=~\"$namespace\"}[5m])))",
+          "legendFormat": "p99 now",
+          "refId": "A"
+        }
+      ],
+      "title": "p99 latency (now)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 10},
+      "id": 101,
+      "title": "Traffic",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Requests per second through the ingress, by service.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "rps", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never"},
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 11},
+      "id": 3,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (exported_service) (rate(nginx_ingress_controller_requests{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{exported_service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request rate (rps) by service",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 20},
+      "id": 102,
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "5xx error rate as a percentage of total requests.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "%", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never"},
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 21},
+      "id": 4,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (exported_service) (rate(nginx_ingress_controller_requests{namespace=~\"$namespace\", status=~\"5..\"}[5m])) / sum by (exported_service) (rate(nginx_ingress_controller_requests{namespace=~\"$namespace\"}[5m]))",
+          "legendFormat": "{{exported_service}} 5xx %",
+          "refId": "A"
+        }
+      ],
+      "title": "5xx error ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Errors broken out by status code.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "rps", "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1, "showPoints": "never", "stacking": {"mode": "normal"}},
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 21},
+      "id": 5,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (status) (rate(nginx_ingress_controller_requests{namespace=~\"$namespace\", status=~\"4..|5..\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Error responses by status code",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 30},
+      "id": 103,
+      "title": "Saturation",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "CPU usage vs request, by container. >1 means using more than reserved.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "ratio", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never"},
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 31},
+      "id": 6,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{namespace=~\"$namespace\", container!=\"\", container!=\"POD\"}[5m])) / sum by (namespace, pod) (kube_pod_container_resource_requests{namespace=~\"$namespace\", resource=\"cpu\"})",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU usage / request",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Memory working set vs limit. >0.9 is the danger zone for OOMKill.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "ratio", "drawStyle": "line", "fillOpacity": 10, "lineWidth": 1, "showPoints": "never"},
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 31},
+      "id": 7,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (namespace, pod) (container_memory_working_set_bytes{namespace=~\"$namespace\", container!=\"\", container!=\"POD\"}) / sum by (namespace, pod) (kube_pod_container_resource_limits{namespace=~\"$namespace\", resource=\"memory\"})",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory working set / limit",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["sre", "golden-signals", "homelab"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "Prometheus"},
+        "hide": 0,
+        "label": "Datasource",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]},
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "definition": "label_values(kube_namespace_created, namespace)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Namespace",
+        "multi": true,
+        "name": "namespace",
+        "options": [],
+        "query": {"query": "label_values(kube_namespace_created, namespace)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "SRE — Golden Signals",
+  "uid": "homelab-golden-signals",
+  "version": 1,
+  "weekStart": ""
+}

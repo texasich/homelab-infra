@@ -16,6 +16,11 @@ helm install grafana grafana/grafana \
   -n monitoring -f grafana-values.yaml
 ```
 
+## alerting + dashboards
+
+- alerting rules live in [`alerting-rules.yaml`](./alerting-rules.yaml) — apply after the helm install
+- the SRE golden-signals dashboard is in [`dashboards/`](./dashboards/) with import instructions
+
 ## notes
 
 - prometheus retention is 15 days / 10GB, whichever comes first

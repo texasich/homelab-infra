@@ -1,0 +1,159 @@
+---
+# prometheus alerting rules for the homelab cluster.
+# install via the kube-prometheus-stack PrometheusRule CRD.
+#
+# kubectl apply -n monitoring -f alerting-rules.yaml
+#
+# severities:
+#   page     — wakes someone up
+#   ticket   — investigate during business hours
+#   info     — informational, no action required by default
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: homelab-sre-rules
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: kube-prometheus-stack
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: cluster.cpu
+      interval: 30s
+      rules:
+        - alert: ContainerCPUThrottlingHigh
+          expr: |
+            sum by (namespace, pod, container) (
+              rate(container_cpu_cfs_throttled_seconds_total{container!="", container!="POD"}[5m])
+            )
+            /
+            sum by (namespace, pod, container) (
+              rate(container_cpu_cfs_periods_total{container!="", container!="POD"}[5m])
+            ) > 0.25
+          for: 15m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "cpu throttled >25% on {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})"
+            description: |
+              container has been CPU-throttled more than 25% of CFS periods for 15 minutes.
+              either the limit is too low or the workload is hot. see runbook.
+            runbook_url: https://github.com/texasich/homelab-infra/blob/main/docs/runbooks/high-cpu-throttling.md
+
+    - name: cluster.workloads
+      interval: 30s
+      rules:
+        - alert: PodCrashLoopBackOff
+          expr: |
+            max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}[5m]) > 0
+          for: 10m
+          labels:
+            severity: page
+          annotations:
+            summary: "pod {{ $labels.namespace }}/{{ $labels.pod }} is in CrashLoopBackOff"
+            description: |
+              container {{ $labels.container }} has been restarting in a loop for >10m.
+              check exit codes, logs, and recent config/image changes.
+            runbook_url: https://github.com/texasich/homelab-infra/blob/main/docs/runbooks/pod-crashloop.md
+
+        - alert: PodRestartingFrequently
+          expr: |
+            increase(kube_pod_container_status_restarts_total[1h]) > 5
+          for: 10m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} restarted >5 times in the last hour"
+            description: |
+              container {{ $labels.container }} has restarted more than 5 times in the past hour
+              without yet entering CrashLoopBackOff. check liveness probe tuning.
+
+    - name: cluster.nodes
+      interval: 30s
+      rules:
+        - alert: NodeNotReady
+          expr: |
+            kube_node_status_condition{condition="Ready", status="true"} == 0
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "node {{ $labels.node }} is NotReady"
+            description: |
+              node has reported NotReady for >5m. check kubelet status, disk pressure,
+              network reachability. if the node is gone for good, cordon and drain.
+
+        - alert: NodeMemoryPressure
+          expr: |
+            kube_node_status_condition{condition="MemoryPressure", status="true"} == 1
+          for: 10m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "node {{ $labels.node }} reporting MemoryPressure"
+            description: |
+              kubelet is reporting MemoryPressure. workloads will be evicted soon.
+              check what's consuming memory; consider scaling out or rebalancing.
+
+    - name: cluster.storage
+      interval: 1m
+      rules:
+        - alert: PersistentVolumeUsageHigh
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes
+              /
+              kubelet_volume_stats_capacity_bytes
+            ) > 0.85
+          for: 15m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "PV {{ $labels.persistentvolumeclaim }} ({{ $labels.namespace }}) >85% full"
+            description: |
+              persistent volume claim is using more than 85% of its capacity.
+              expand the PVC, clean up data, or rotate logs.
+
+        - alert: PersistentVolumeUsageCritical
+          expr: |
+            (
+              kubelet_volume_stats_used_bytes
+              /
+              kubelet_volume_stats_capacity_bytes
+            ) > 0.95
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "PV {{ $labels.persistentvolumeclaim }} ({{ $labels.namespace }}) >95% full"
+            description: |
+              PVC will run out of space imminently. expand or free space NOW.
+
+    - name: cluster.certs
+      interval: 5m
+      rules:
+        - alert: CertificateExpiringSoon
+          expr: |
+            (certmanager_certificate_expiration_timestamp_seconds - time()) / 86400 < 30
+          for: 1h
+          labels:
+            severity: ticket
+          annotations:
+            summary: "cert {{ $labels.namespace }}/{{ $labels.name }} expires in <30 days"
+            description: |
+              cert-manager certificate is within 30 days of expiry. cert-manager should
+              renew automatically; if it isn't, check the Certificate resource and
+              the issuer/clusterissuer for errors.
+
+        - alert: CertificateExpired
+          expr: |
+            (certmanager_certificate_expiration_timestamp_seconds - time()) <= 0
+          for: 5m
+          labels:
+            severity: page
+          annotations:
+            summary: "cert {{ $labels.namespace }}/{{ $labels.name }} HAS EXPIRED"
+            description: |
+              certificate is past its expiry. clients will see TLS errors. renew immediately.
